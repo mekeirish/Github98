@@ -529,11 +529,6 @@
       display: none !important;
     }
   </style>
-<link rel="manifest" href="./manifest.json">
-<meta name="theme-color" content="#050608">
-<meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<link rel="apple-touch-icon" href="./icon.png">
 </head>
 <body>
 
@@ -582,7 +577,7 @@
     </div>
   </div>
 
-  <!-- 3. PANNEAU DE CONFIGURATION (IMPORT/EXPORT JSON) -->
+  <!-- 3. PANNEAU DE CONFIGURATION (AVEC TOKEN GITHUB & SWITCH) -->
   <div id="win-config" class="window modal-win win-outset hidden" style="z-index: 500;">
     <div class="window-titlebar">
       <div class="window-title">
@@ -599,6 +594,16 @@
       </div>
 
       <div class="form-group">
+        <label for="config-token">Token d'accès GitHub (PAT) :</label>
+        <input type="password" id="config-token" class="win-input win-inset" placeholder="ghp_..." />
+      </div>
+
+      <div class="form-group" style="flex-direction: row; align-items: center; gap: 8px;">
+        <input type="checkbox" id="config-auto-sync" style="cursor: pointer;" />
+        <label for="config-auto-sync" style="cursor: pointer; font-weight: normal;">Synchroniser automatiquement tous les GitHub Pages en icônes</label>
+      </div>
+
+      <div class="form-group">
         <label>Sauvegarde & Restauration (JSON) :</label>
         <div class="json-actions">
           <button class="btn-dialog win-outset" style="flex:1;" onclick="exportConfigJson()">Export JSON</button>
@@ -607,7 +612,7 @@
       </div>
 
       <div class="window-footer">
-        <button class="btn-dialog win-outset" onclick="saveGithubUsername()">Enregistrer</button>
+        <button class="btn-dialog win-outset" onclick="saveConfig()">Enregistrer</button>
         <button class="btn-dialog win-outset" onclick="closeWindow('win-config')">Annuler</button>
       </div>
     </div>
@@ -678,12 +683,18 @@
         </svg>
         <span>Panneau de configuration</span>
       </div>
+      <div class="start-item" onclick="triggerWallpaperUpload(); toggleStartMenu();">
+        <svg style="width:18px; height:18px;" viewBox="0 0 32 32">
+          <rect x="4" y="4" width="24" height="20" fill="#008080" stroke="#fff" stroke-width="1"/>
+        </svg>
+        <span>Changer le Wallpaper</span>
+      </div>
       <div class="start-separator"></div>
       <div class="start-item" onclick="toggleEditMode(); toggleStartMenu();">
         <svg style="width:18px; height:18px;" viewBox="0 0 32 32">
           <circle cx="16" cy="16" r="10" fill="#808080"/>
         </svg>
-        <span>Mode Édition (Long Press)</span>
+        <span id="edit-mode-label">Activer Mode Édition</span>
       </div>
     </div>
   </div>
@@ -719,8 +730,10 @@
     const MARGIN_Y = 15;
 
     let githubUsername = localStorage.getItem('github_98_username') || "username";
+    let githubToken = localStorage.getItem('github_98_token') || "";
+    let autoSyncEnabled = localStorage.getItem('github_98_autosync') === 'true';
+
     let isEditMode = false;
-    let longPressTimer = null;
     let currentPage = 0;
     let totalPages = 1;
 
@@ -730,12 +743,15 @@
     let isPwaMinimized = false;
 
     let customIcons = JSON.parse(localStorage.getItem('github_98_custom_icons') || '[]');
+    let apiFetchedIcons = [];
     let iconPositions = JSON.parse(localStorage.getItem('github_98_icon_positions') || '{}');
 
-    document.addEventListener('DOMContentLoaded', () => {
+    document.addEventListener('DOMContentLoaded', async () => {
       loadWallpaper();
+      if (autoSyncEnabled && githubUsername && githubUsername !== "username") {
+        await fetchGithubPagesRepos();
+      }
       renderDesktop();
-      setupLongPress();
       setupWallpaperUploader();
       setupSwipeGesture();
       setupJsonImportExport();
@@ -748,6 +764,35 @@
       const hours = String(now.getHours()).padStart(2, '0');
       const minutes = String(now.getMinutes()).padStart(2, '0');
       document.getElementById('clock').textContent = `${hours}:${minutes}`;
+    }
+
+    /* --------------------------------------------------
+       API GITHUB PAGES FETCHING
+    -------------------------------------------------- */
+    async function fetchGithubPagesRepos() {
+      if (!githubUsername || githubUsername === "username") return;
+      try {
+        const headers = {};
+        if (githubToken) {
+          headers['Authorization'] = `token ${githubToken}`;
+        }
+        const response = await fetch(`https://api.github.com/users/${githubUsername}/repos?per_page=100`, { headers });
+        if (!response.ok) throw new Error("Erreur de récupération des dépôts GitHub");
+        const repos = await response.json();
+
+        apiFetchedIcons = repos.map(repo => {
+          return {
+            id: 'api-repo-' + repo.id,
+            name: repo.name,
+            url: `https://${githubUsername}.github.io/${repo.name}/`,
+            imgSrc: `https://raw.githubusercontent.com/${githubUsername}/${repo.name}/main/icon.png`,
+            isApi: true
+          };
+        });
+      } catch (err) {
+        console.error(err);
+        apiFetchedIcons = [];
+      }
     }
 
     /* --------------------------------------------------
@@ -770,10 +815,13 @@
       const { cols, rows } = getGridDimensions();
       const itemsPerPage = cols * rows;
 
+      const activeApiIcons = autoSyncEnabled ? apiFetchedIcons : [];
+
       const allAppList = [
         { id: 'static-computer', type: 'static', name: 'Poste de travail' },
         { id: 'static-about', type: 'static', name: 'À propos' },
         ...customIcons,
+        ...activeApiIcons,
         { id: 'btn-add-icon', type: 'add', name: 'Ajouter...' }
       ];
 
@@ -788,7 +836,7 @@
         }
       });
 
-      totalPages = maxPageFound + 2; // +1 page vide à droite
+      totalPages = maxPageFound + 2;
 
       for (let p = 0; p < totalPages; p++) {
         const pageEl = document.createElement('div');
@@ -865,8 +913,9 @@
         el.onclick = () => { if (isEditMode) openWindow('win-add-icon'); };
       } else {
         el.className = 'desktop-icon custom';
+        const deleteBtnHtml = item.isApi ? '' : `<div class="delete-icon-btn" onclick="deleteCustomIcon(event, '${item.id}')">✕</div>`;
         el.innerHTML = `
-          <div class="delete-icon-btn" onclick="deleteCustomIcon(event, '${item.id}')">✕</div>
+          ${deleteBtnHtml}
           <img src="${item.imgSrc}" alt="${item.name}" onerror="this.onerror=null; this.src='https://raw.githubusercontent.com/${githubUsername}/${item.name}/master/icon.png';" />
           <span>${item.name}</span>`;
         el.onclick = () => {
@@ -1004,7 +1053,7 @@
     }
 
     /* --------------------------------------------------
-       ARRIÈRE-PLAN & IMPORT/EXPORT JSON
+       ARRIÈRE-PLAN & UPLOAD WALLPAPER
     -------------------------------------------------- */
     function loadWallpaper() {
       const savedBg = localStorage.getItem('github_98_wallpaper');
@@ -1014,16 +1063,12 @@
       }
     }
 
+    function triggerWallpaperUpload() {
+      document.getElementById('bg-file-input').click();
+    }
+
     function setupWallpaperUploader() {
-      const container = document.getElementById('desktop-container');
       const bgInput = document.getElementById('bg-file-input');
-
-      container.addEventListener('click', (e) => {
-        if (isEditMode && e.target.id === 'desktop-container') {
-          bgInput.click();
-        }
-      });
-
       bgInput.addEventListener('change', (e) => {
         const file = e.target.files[0];
         if (file) {
@@ -1041,6 +1086,8 @@
     function exportConfigJson() {
       const configData = {
         githubUsername: localStorage.getItem('github_98_username') || "username",
+        githubToken: localStorage.getItem('github_98_token') || "",
+        autoSync: localStorage.getItem('github_98_autosync') === 'true',
         customIcons: JSON.parse(localStorage.getItem('github_98_custom_icons') || '[]'),
         iconPositions: JSON.parse(localStorage.getItem('github_98_icon_positions') || '{}'),
         wallpaper: localStorage.getItem('github_98_wallpaper') || ""
@@ -1065,19 +1112,24 @@
         const file = e.target.files[0];
         if (file) {
           const reader = new FileReader();
-          reader.onload = function(evt) {
+          reader.onload = async function(evt) {
             try {
               const data = JSON.parse(evt.target.result);
               if (data.githubUsername) localStorage.setItem('github_98_username', data.githubUsername);
+              if (data.githubToken !== undefined) localStorage.setItem('github_98_token', data.githubToken);
+              if (data.autoSync !== undefined) localStorage.setItem('github_98_autosync', data.autoSync);
               if (data.customIcons) localStorage.setItem('github_98_custom_icons', JSON.stringify(data.customIcons));
               if (data.iconPositions) localStorage.setItem('github_98_icon_positions', JSON.stringify(data.iconPositions));
               if (data.wallpaper) localStorage.setItem('github_98_wallpaper', data.wallpaper);
 
               githubUsername = data.githubUsername || githubUsername;
+              githubToken = data.githubToken || "";
+              autoSyncEnabled = data.autoSync || false;
               customIcons = data.customIcons || [];
               iconPositions = data.iconPositions || {};
 
               loadWallpaper();
+              if (autoSyncEnabled) await fetchGithubPagesRepos();
               renderDesktop();
               closeWindow('win-config');
               alert("Configuration importée avec succès !");
@@ -1091,37 +1143,15 @@
     }
 
     /* --------------------------------------------------
-       LONG PRESS & MODE ÉDITION
+       MODE ÉDITION (DEPUIS LE MENU DÉMARRER)
     -------------------------------------------------- */
-    function setupLongPress() {
-      const container = document.getElementById('desktop-container');
-
-      const startPress = (e) => {
-        if (e.target.id === 'desktop-container' || e.target.classList.contains('desktop-page')) {
-          longPressTimer = setTimeout(() => {
-            toggleEditMode();
-          }, 600);
-        }
-      };
-
-      const cancelPress = () => {
-        if (longPressTimer) {
-          clearTimeout(longPressTimer);
-          longPressTimer = null;
-        }
-      };
-
-      container.addEventListener('touchstart', startPress, { passive: true });
-      container.addEventListener('touchend', cancelPress);
-      container.addEventListener('touchmove', cancelPress);
-      container.addEventListener('mousedown', startPress);
-      container.addEventListener('mouseup', cancelPress);
-      container.addEventListener('mouseleave', cancelPress);
-    }
-
     function toggleEditMode() {
       isEditMode = !isEditMode;
       document.body.classList.toggle('edit-mode', isEditMode);
+      const label = document.getElementById('edit-mode-label');
+      if (label) {
+        label.textContent = isEditMode ? "Désactiver Mode Édition" : "Activer Mode Édition";
+      }
     }
 
     /* --------------------------------------------------
@@ -1129,18 +1159,35 @@
     -------------------------------------------------- */
     function openConfigPanel() {
       document.getElementById('config-username').value = githubUsername;
+      document.getElementById('config-token').value = githubToken;
+      document.getElementById('config-auto-sync').checked = autoSyncEnabled;
       openWindow('win-config');
     }
 
-    function saveGithubUsername() {
-      const input = document.getElementById('config-username').value.trim();
-      if (input) {
-        githubUsername = input;
+    async function saveConfig() {
+      const uInput = document.getElementById('config-username').value.trim();
+      const tInput = document.getElementById('config-token').value.trim();
+      const syncChecked = document.getElementById('config-auto-sync').checked;
+
+      if (uInput) {
+        githubUsername = uInput;
         localStorage.setItem('github_98_username', githubUsername);
-        alert(`Compte GitHub mis à jour : ${githubUsername}`);
-        updateUrlPreview();
-        closeWindow('win-config');
       }
+      githubToken = tInput;
+      localStorage.setItem('github_98_token', githubToken);
+
+      autoSyncEnabled = syncChecked;
+      localStorage.setItem('github_98_autosync', autoSyncEnabled);
+
+      if (autoSyncEnabled) {
+        await fetchGithubPagesRepos();
+      } else {
+        apiFetchedIcons = [];
+      }
+
+      renderDesktop();
+      closeWindow('win-config');
+      alert("Paramètres de configuration enregistrés !");
     }
 
     function updateUrlPreview() {
@@ -1302,12 +1349,5 @@
       renderDesktop();
     }
   </script>
-<script>
-if ('serviceWorker' in navigator) {
-window.addEventListener('load',()=>{
-navigator.serviceWorker.register('./sw.js').catch(err=>console.error(err));
-});
-}
-</script>
 </body>
 </html>
