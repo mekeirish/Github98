@@ -1,0 +1,1313 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>Github 98 Mobile Simulator</title>
+  <style>
+    /* --------------------------------------------------
+       RESET & BASE DE STYLE SYSTEME
+    -------------------------------------------------- */
+    * {
+      box-sizing: border-box;
+      user-select: none;
+      -webkit-user-select: none;
+      -webkit-touch-callout: none;
+      margin: 0;
+      padding: 0;
+    }
+
+    :root {
+      --win-bg: #008080; /* Vert Teal Github 98 */
+      --win-gray: #c0c0c0; /* Gris boîte classique */
+      --win-light: #ffffff;
+      --win-border-light: #dfdfdf;
+      --win-shadow-dark: #808080;
+      --win-shadow-black: #000000;
+      --win-blue: #000080; /* Navy Titlebar */
+      --win-blue-light: #1084d0;
+      --taskbar-height: 38px;
+      --icon-w: 75px;
+      --icon-h: 85px;
+    }
+
+    body, html {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      font-family: "Tahoma", "MS Sans Serif", Geneva, sans-serif;
+      font-size: 11px;
+      background-color: var(--win-bg);
+      touch-action: manipulation;
+    }
+
+    /* --------------------------------------------------
+       EFFETS DE BORDURES RETRO 3D
+    -------------------------------------------------- */
+    .win-outset {
+      border-top: 2px solid var(--win-light);
+      border-left: 2px solid var(--win-light);
+      border-right: 2px solid var(--win-shadow-black);
+      border-bottom: 2px solid var(--win-shadow-black);
+      box-shadow: inset 1px 1px 0px var(--win-border-light), 
+                  inset -1px -1px 0px var(--win-shadow-dark);
+    }
+
+    .win-outset:active, .win-outset.pressed {
+      border-top: 2px solid var(--win-shadow-black);
+      border-left: 2px solid var(--win-shadow-black);
+      border-right: 2px solid var(--win-light);
+      border-bottom: 2px solid var(--win-light);
+      box-shadow: inset 1px 1px 0px var(--win-shadow-dark), 
+                  inset -1px -1px 0px var(--win-border-light);
+    }
+
+    .win-inset {
+      border-top: 2px solid var(--win-shadow-dark);
+      border-left: 2px solid var(--win-shadow-dark);
+      border-right: 2px solid var(--win-light);
+      border-bottom: 2px solid var(--win-light);
+      box-shadow: inset 1px 1px 0px var(--win-shadow-black), 
+                  inset -1px -1px 0px var(--win-border-light);
+    }
+
+    /* --------------------------------------------------
+       BUREAU MULTI-PAGES & SLIDER
+    -------------------------------------------------- */
+    #desktop-container {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      bottom: var(--taskbar-height);
+      overflow: hidden;
+      background-color: var(--win-bg);
+      background-size: cover;
+      background-position: center;
+      background-repeat: no-repeat;
+      transition: filter 0.2s ease;
+    }
+
+    body.edit-mode #desktop-container {
+      filter: brightness(0.85);
+    }
+
+    #desktop-viewport {
+      display: flex;
+      width: 100%;
+      height: 100%;
+      transition: transform 0.3s cubic-bezier(0.25, 1, 0.5, 1);
+    }
+
+    .desktop-page {
+      position: relative;
+      flex: 0 0 100%;
+      width: 100%;
+      height: 100%;
+      padding: 10px;
+    }
+
+    /* Indicateur de page */
+    #page-indicator {
+      position: absolute;
+      top: 8px;
+      left: 50%;
+      transform: translateX(-50%);
+      display: flex;
+      gap: 6px;
+      z-index: 8000;
+      pointer-events: none;
+    }
+
+    .page-dot {
+      width: 6px;
+      height: 6px;
+      background: rgba(255, 255, 255, 0.4);
+      border-radius: 50%;
+      border: 1px solid rgba(0, 0, 0, 0.5);
+    }
+
+    .page-dot.active {
+      background: #ffffff;
+      box-shadow: 0 0 3px #000;
+    }
+
+    #edit-indicator {
+      position: absolute;
+      top: 8px;
+      right: 8px;
+      background: #ff0000;
+      color: #ffffff;
+      padding: 4px 8px;
+      font-weight: bold;
+      font-size: 10px;
+      border: 1px solid #ffffff;
+      display: none;
+      z-index: 9000;
+      animation: blink 1s infinite;
+      pointer-events: none;
+    }
+
+    @keyframes blink {
+      50% { opacity: 0.5; }
+    }
+
+    body.edit-mode #edit-indicator {
+      display: block;
+    }
+
+    #bg-file-input, #json-file-input {
+      display: none;
+    }
+
+    /* --------------------------------------------------
+       ICÔNES DU BUREAU
+    -------------------------------------------------- */
+    .desktop-icon {
+      position: absolute;
+      width: var(--icon-w);
+      height: var(--icon-h);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      cursor: pointer;
+      padding: 2px;
+      border: 1px transparent dotted;
+      touch-action: none;
+      transition: top 0.15s ease, left 0.15s ease;
+    }
+
+    .desktop-icon.dragging {
+      transition: none !important;
+      z-index: 9999 !important;
+    }
+
+    .desktop-icon:active {
+      background-color: rgba(0, 0, 128, 0.4);
+      border-color: #ffc000;
+    }
+
+    body.edit-mode .desktop-icon {
+      border: 1px dashed rgba(255, 255, 255, 0.8);
+      background: rgba(0, 0, 0, 0.2);
+    }
+
+    .desktop-icon img, .desktop-icon .icon-svg {
+      width: 32px;
+      height: 32px;
+      margin-bottom: 2px;
+      object-fit: contain;
+      image-rendering: pixelated;
+      pointer-events: none;
+    }
+
+    .desktop-icon span {
+      color: white;
+      font-size: 11px;
+      text-shadow: 1px 1px 1px black;
+      word-break: break-word;
+      line-height: 1.1;
+      pointer-events: none;
+    }
+
+    .delete-icon-btn {
+      display: none;
+      position: absolute;
+      top: -4px;
+      right: -4px;
+      width: 18px;
+      height: 18px;
+      background: #ff0000;
+      color: white;
+      font-weight: bold;
+      font-size: 11px;
+      border-radius: 50%;
+      border: 1px solid white;
+      align-items: center;
+      justify-content: center;
+      line-height: 1;
+      z-index: 10;
+    }
+
+    body.edit-mode .desktop-icon.custom .delete-icon-btn {
+      display: flex;
+    }
+
+    .add-icon-btn {
+      position: absolute;
+      width: var(--icon-w);
+      height: var(--icon-h);
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      cursor: pointer;
+      padding: 2px;
+      border: 1px dashed #ffffff;
+      background: rgba(255, 255, 255, 0.2);
+    }
+
+    body.edit-mode .add-icon-btn {
+      display: flex;
+    }
+
+    /* --------------------------------------------------
+       BARRE DES TÂCHES (TASKBAR)
+    -------------------------------------------------- */
+    #taskbar {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      width: 100%;
+      height: var(--taskbar-height);
+      background-color: var(--win-gray);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 2px 3px;
+      z-index: 9999;
+    }
+
+    #start-button {
+      height: 30px;
+      padding: 0 8px;
+      background-color: var(--win-gray);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-weight: bold;
+      font-size: 12px;
+      cursor: pointer;
+    }
+
+    .taskbar-divider {
+      width: 2px;
+      height: 22px;
+      margin: 0 4px;
+      border-left: 1px solid var(--win-shadow-dark);
+      border-right: 1px solid var(--win-light);
+    }
+
+    .taskbar-tasks {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      gap: 3px;
+      overflow-x: auto;
+      height: 100%;
+    }
+
+    .task-item {
+      height: 28px;
+      max-width: 130px;
+      min-width: 80px;
+      background-color: var(--win-gray);
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      padding: 0 6px;
+      font-size: 11px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      cursor: pointer;
+    }
+
+    #system-tray {
+      height: 28px;
+      padding: 0 8px;
+      background-color: var(--win-gray);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 11px;
+    }
+
+    /* --------------------------------------------------
+       MENU DÉMARRER
+    -------------------------------------------------- */
+    #start-menu {
+      position: absolute;
+      bottom: var(--taskbar-height);
+      left: 2px;
+      width: 230px;
+      background-color: var(--win-gray);
+      display: none;
+      flex-direction: row;
+      z-index: 10000;
+      padding: 2px;
+    }
+
+    #start-menu.active {
+      display: flex;
+    }
+
+    .start-sidebar {
+      width: 28px;
+      background: linear-gradient(to top, #000080, #1084d0);
+      display: flex;
+      align-items: flex-end;
+      justify-content: center;
+      padding-bottom: 10px;
+    }
+
+    .start-sidebar span {
+      color: white;
+      font-weight: bold;
+      font-size: 14px;
+      writing-mode: vertical-rl;
+      transform: rotate(180deg);
+      letter-spacing: 1px;
+    }
+
+    .start-items {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      padding: 2px 0;
+    }
+
+    .start-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 6px 10px;
+      font-size: 11px;
+      color: black;
+      text-decoration: none;
+      cursor: pointer;
+    }
+
+    .start-item:hover, .start-item:active {
+      background-color: var(--win-blue);
+      color: white;
+    }
+
+    .start-separator {
+      height: 1px;
+      border-top: 1px solid var(--win-shadow-dark);
+      border-bottom: 1px solid var(--win-light);
+      margin: 3px 2px;
+    }
+
+    /* --------------------------------------------------
+       FENÊTRES
+    -------------------------------------------------- */
+    .window {
+      position: absolute;
+      top: 10px;
+      left: 8px;
+      right: 8px;
+      bottom: calc(var(--taskbar-height) + 10px);
+      background-color: var(--win-gray);
+      padding: 3px;
+      display: flex;
+      flex-direction: column;
+      z-index: 100;
+    }
+
+    .window.modal-win {
+      bottom: auto;
+      top: 30px;
+    }
+
+    .window-titlebar {
+      height: 22px;
+      background: linear-gradient(90deg, var(--win-blue), var(--win-blue-light));
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 4px;
+      color: white;
+      font-weight: bold;
+      font-size: 11px;
+    }
+
+    .window-title {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      overflow: hidden;
+      white-space: nowrap;
+      text-overflow: ellipsis;
+    }
+
+    .window-controls {
+      display: flex;
+      gap: 2px;
+    }
+
+    .win-btn {
+      width: 16px;
+      height: 14px;
+      background-color: var(--win-gray);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 9px;
+      font-weight: bold;
+      color: black;
+      cursor: pointer;
+      line-height: 1;
+    }
+
+    .window-body {
+      flex: 1;
+      padding: 8px;
+      background-color: var(--win-gray);
+      color: black;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    .pwa-iframe {
+      width: 100%;
+      height: 100%;
+      border: none;
+      background: #ffffff;
+    }
+
+    .window-footer {
+      margin-top: 8px;
+      display: flex;
+      justify-content: flex-end;
+      gap: 6px;
+    }
+
+    .btn-dialog {
+      padding: 4px 14px;
+      background-color: var(--win-gray);
+      font-size: 11px;
+      cursor: pointer;
+    }
+
+    .form-group {
+      margin-bottom: 10px;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .win-input {
+      padding: 4px 6px;
+      background: #fff;
+      border: none;
+      outline: none;
+      font-family: inherit;
+      font-size: 11px;
+      width: 100%;
+    }
+
+    .url-preview {
+      font-size: 10px;
+      color: #000080;
+      word-break: break-all;
+      margin-top: 2px;
+      font-weight: bold;
+    }
+
+    .credits-box {
+      background: #ffffff;
+      padding: 8px;
+      font-family: "Courier New", monospace;
+      font-size: 11px;
+      margin-top: 8px;
+      color: #000;
+    }
+
+    .json-actions {
+      display: flex;
+      gap: 8px;
+      margin-top: 10px;
+    }
+
+    .hidden {
+      display: none !important;
+    }
+  </style>
+<link rel="manifest" href="./manifest.json">
+<meta name="theme-color" content="#050608">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="apple-touch-icon" href="./icon.png">
+</head>
+<body>
+
+  <!-- INDICATEUR ET INPUTS FICHIERS -->
+  <div id="edit-indicator">MODE ÉDITION</div>
+  <input type="file" id="bg-file-input" accept="image/*" />
+  <input type="file" id="json-file-input" accept=".json" />
+
+  <!-- 1. BUREAU SLIDER (DESKTOP) -->
+  <main id="desktop-container">
+    <div id="page-indicator"></div>
+    <div id="desktop-viewport"></div>
+  </main>
+
+  <!-- 2. FENÊTRE À PROPOS -->
+  <div id="win-about" class="window modal-win win-outset hidden">
+    <div class="window-titlebar">
+      <div class="window-title">
+        <span>Github 98 Mobile Edition</span>
+      </div>
+      <div class="window-controls">
+        <div class="win-btn win-outset" onclick="closeWindow('win-about')">✕</div>
+      </div>
+    </div>
+    <div class="window-body">
+      <div style="display: flex; gap: 12px; align-items: center;">
+        <svg style="width: 40px; height: 40px; flex-shrink: 0;" viewBox="0 0 32 32">
+          <path d="M 2 4 L 14 2 L 14 15 L 2 15 Z" fill="#ff4500"/>
+          <path d="M 16 2 L 30 0 L 30 15 L 16 15 Z" fill="#32cd32"/>
+          <path d="M 2 17 L 14 17 L 14 30 L 2 28 Z" fill="#00bfff"/>
+          <path d="M 16 17 L 30 17 L 30 32 L 16 30 Z" fill="#ffd700"/>
+        </svg>
+        <div>
+          <strong style="font-size: 12px;">Github 98 OS</strong><br/>
+          <span style="color: #404040;">Smartphone PWA Launcher</span>
+        </div>
+      </div>
+
+      <div class="credits-box win-inset">
+        Github 98 - Progressive Web App Dashboard
+      </div>
+
+      <div class="window-footer">
+        <button class="btn-dialog win-outset" onclick="closeWindow('win-about')">OK</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 3. PANNEAU DE CONFIGURATION (IMPORT/EXPORT JSON) -->
+  <div id="win-config" class="window modal-win win-outset hidden" style="z-index: 500;">
+    <div class="window-titlebar">
+      <div class="window-title">
+        <span>Panneau de configuration</span>
+      </div>
+      <div class="window-controls">
+        <div class="win-btn win-outset" onclick="closeWindow('win-config')">✕</div>
+      </div>
+    </div>
+    <div class="window-body">
+      <div class="form-group">
+        <label for="config-username">Nom du compte GitHub :</label>
+        <input type="text" id="config-username" class="win-input win-inset" placeholder="username" />
+      </div>
+
+      <div class="form-group">
+        <label>Sauvegarde & Restauration (JSON) :</label>
+        <div class="json-actions">
+          <button class="btn-dialog win-outset" style="flex:1;" onclick="exportConfigJson()">Export JSON</button>
+          <button class="btn-dialog win-outset" style="flex:1;" onclick="importConfigJson()">Import JSON</button>
+        </div>
+      </div>
+
+      <div class="window-footer">
+        <button class="btn-dialog win-outset" onclick="saveGithubUsername()">Enregistrer</button>
+        <button class="btn-dialog win-outset" onclick="closeWindow('win-config')">Annuler</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 4. MODALE AJOUTER UNE ICÔNE -->
+  <div id="win-add-icon" class="window modal-win win-outset hidden" style="z-index: 500;">
+    <div class="window-titlebar">
+      <div class="window-title">
+        <span>Ajouter un projet GitHub Pages</span>
+      </div>
+      <div class="window-controls">
+        <div class="win-btn win-outset" onclick="closeWindow('win-add-icon')">✕</div>
+      </div>
+    </div>
+    <div class="window-body">
+      <div class="form-group">
+        <label for="icon-name">Nom du dépôt (ex: my-pwa) :</label>
+        <input type="text" id="icon-name" class="win-input win-inset" placeholder="my-pwa" oninput="updateUrlPreview()" />
+        <div id="url-preview-text" class="url-preview">https://...</div>
+      </div>
+
+      <div class="form-group">
+        <label for="icon-file">Image personnalisée (Facultatif) :</label>
+        <input type="file" id="icon-file" accept="image/*" class="win-input win-inset" />
+      </div>
+
+      <div class="window-footer">
+        <button class="btn-dialog win-outset" onclick="addNewIcon()">Valider</button>
+        <button class="btn-dialog win-outset" onclick="closeWindow('win-add-icon')">Annuler</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 5. CONTENEUR DYNAMIQUE DE FENÊTRE PWA -->
+  <div id="win-pwa-viewer" class="window win-outset hidden">
+    <div class="window-titlebar">
+      <div class="window-title">
+        <span id="pwa-window-title">PWA Application</span>
+      </div>
+      <div class="window-controls">
+        <div class="win-btn win-outset" onclick="openPWAInNewTab()">↗</div>
+        <div class="win-btn win-outset" onclick="minimizePWAWindow()">_</div>
+        <div class="win-btn win-outset" onclick="closePWAWindow()">✕</div>
+      </div>
+    </div>
+    <div class="window-body">
+      <iframe id="pwa-iframe" class="pwa-iframe win-inset" src="about:blank"></iframe>
+    </div>
+  </div>
+
+  <!-- 6. MENU DÉMARRER -->
+  <div id="start-menu" class="win-outset">
+    <div class="start-sidebar">
+      <span>Github<b>98</b></span>
+    </div>
+    <div class="start-items">
+      <div class="start-item" onclick="openWindow('win-about'); toggleStartMenu();">
+        <svg style="width:18px; height:18px;" viewBox="0 0 32 32">
+          <rect x="4" y="4" width="24" height="24" fill="#ffa500"/>
+        </svg>
+        <span>Programmes</span>
+      </div>
+      <div class="start-item" onclick="openConfigPanel(); toggleStartMenu();">
+        <svg style="width:18px; height:18px;" viewBox="0 0 32 32">
+          <rect x="6" y="6" width="20" height="20" fill="#808080" stroke="#000" stroke-width="1"/>
+          <circle cx="16" cy="16" r="5" fill="#c0c0c0"/>
+        </svg>
+        <span>Panneau de configuration</span>
+      </div>
+      <div class="start-separator"></div>
+      <div class="start-item" onclick="toggleEditMode(); toggleStartMenu();">
+        <svg style="width:18px; height:18px;" viewBox="0 0 32 32">
+          <circle cx="16" cy="16" r="10" fill="#808080"/>
+        </svg>
+        <span>Mode Édition (Long Press)</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- 7. BARRE DES TÂCHES -->
+  <footer id="taskbar" class="win-outset">
+    <div id="start-button" class="win-outset" onclick="toggleStartMenu()">
+      <svg style="width:16px; height:16px;" viewBox="0 0 32 32">
+        <path d="M 2 4 L 14 2 L 14 15 L 2 15 Z" fill="#ff4500"/>
+        <path d="M 16 2 L 30 0 L 30 15 L 16 15 Z" fill="#32cd32"/>
+        <path d="M 2 17 L 14 17 L 14 30 L 2 28 Z" fill="#00bfff"/>
+        <path d="M 16 17 L 30 17 L 30 32 L 16 30 Z" fill="#ffd700"/>
+      </svg>
+      <span>Démarrer</span>
+    </div>
+
+    <div class="taskbar-divider"></div>
+    <div id="taskbar-apps" class="taskbar-tasks"></div>
+
+    <div id="system-tray" class="win-inset">
+      <svg style="width:16px; height:16px;" viewBox="0 0 24 24" fill="black">
+        <path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02z"/>
+      </svg>
+      <span id="clock">12:00</span>
+    </div>
+  </footer>
+
+  <!-- 8. LOGIQUE JAVASCRIPT -->
+  <script>
+    const ICON_W = 75;
+    const ICON_H = 85;
+    const MARGIN_X = 12;
+    const MARGIN_Y = 15;
+
+    let githubUsername = localStorage.getItem('github_98_username') || "username";
+    let isEditMode = false;
+    let longPressTimer = null;
+    let currentPage = 0;
+    let totalPages = 1;
+
+    let currentPwaUrl = "";
+    let currentPwaName = "";
+    let isPwaOpen = false;
+    let isPwaMinimized = false;
+
+    let customIcons = JSON.parse(localStorage.getItem('github_98_custom_icons') || '[]');
+    let iconPositions = JSON.parse(localStorage.getItem('github_98_icon_positions') || '{}');
+
+    document.addEventListener('DOMContentLoaded', () => {
+      loadWallpaper();
+      renderDesktop();
+      setupLongPress();
+      setupWallpaperUploader();
+      setupSwipeGesture();
+      setupJsonImportExport();
+      updateClock();
+      setInterval(updateClock, 1000);
+    });
+
+    function updateClock() {
+      const now = new Date();
+      const hours = String(now.getHours()).padStart(2, '0');
+      const minutes = String(now.getMinutes()).padStart(2, '0');
+      document.getElementById('clock').textContent = `${hours}:${minutes}`;
+    }
+
+    /* --------------------------------------------------
+       GRILLE & MULTI-PAGES DU BUREAU
+    -------------------------------------------------- */
+    function getGridDimensions() {
+      const container = document.getElementById('desktop-container');
+      const w = container.clientWidth || window.innerWidth;
+      const h = container.clientHeight || (window.innerHeight - 38);
+
+      const cols = Math.max(1, Math.floor((w - MARGIN_X) / ICON_W));
+      const rows = Math.max(1, Math.floor((h - MARGIN_Y) / ICON_H));
+      return { cols, rows, w, h };
+    }
+
+    function renderDesktop() {
+      const viewport = document.getElementById('desktop-viewport');
+      viewport.innerHTML = '';
+
+      const { cols, rows } = getGridDimensions();
+      const itemsPerPage = cols * rows;
+
+      const allAppList = [
+        { id: 'static-computer', type: 'static', name: 'Poste de travail' },
+        { id: 'static-about', type: 'static', name: 'À propos' },
+        ...customIcons,
+        { id: 'btn-add-icon', type: 'add', name: 'Ajouter...' }
+      ];
+
+      let maxPageFound = 0;
+      allAppList.forEach((item, index) => {
+        let pos = iconPositions[item.id];
+        if (pos && pos.page !== undefined) {
+          if (pos.page > maxPageFound) maxPageFound = pos.page;
+        } else {
+          let autoPage = Math.floor(index / itemsPerPage);
+          if (autoPage > maxPageFound) maxPageFound = autoPage;
+        }
+      });
+
+      totalPages = maxPageFound + 2; // +1 page vide à droite
+
+      for (let p = 0; p < totalPages; p++) {
+        const pageEl = document.createElement('div');
+        pageEl.className = 'desktop-page';
+        pageEl.dataset.page = p;
+        viewport.appendChild(pageEl);
+      }
+
+      allAppList.forEach((item, index) => {
+        let pos = iconPositions[item.id];
+        let page, col, row;
+
+        if (pos && pos.page !== undefined) {
+          page = pos.page;
+          col = pos.col;
+          row = pos.row;
+        } else {
+          page = Math.floor(index / itemsPerPage);
+          let idxInPage = index % itemsPerPage;
+          row = idxInPage % rows;
+          col = Math.floor(idxInPage / rows);
+          iconPositions[item.id] = { page, col, row };
+        }
+
+        const targetPage = viewport.children[page] || viewport.children[0];
+        const iconEl = createIconElement(item);
+
+        const posX = MARGIN_X + (col * ICON_W);
+        const posY = MARGIN_Y + (row * ICON_H);
+
+        iconEl.style.left = posX + 'px';
+        iconEl.style.top = posY + 'px';
+
+        targetPage.appendChild(iconEl);
+        setupDragForIcon(iconEl, item.id);
+      });
+
+      localStorage.setItem('github_98_icon_positions', JSON.stringify(iconPositions));
+      updatePageIndicators();
+      switchPage(currentPage);
+    }
+
+    function createIconElement(item) {
+      const el = document.createElement('div');
+      el.id = item.id;
+
+      if (item.type === 'static') {
+        el.className = 'desktop-icon';
+        if (item.id === 'static-computer') {
+          el.innerHTML = `
+            <svg class="icon-svg" viewBox="0 0 32 32">
+              <rect x="2" y="4" width="28" height="18" fill="#c0c0c0" stroke="#000" stroke-width="2"/>
+              <rect x="5" y="7" width="22" height="12" fill="#008080"/>
+              <path d="M 8 22 L 24 22 L 26 28 L 6 28 Z" fill="#808080" stroke="#000" stroke-width="1.5"/>
+            </svg>
+            <span>Poste de travail</span>`;
+        } else {
+          el.innerHTML = `
+            <svg class="icon-svg" viewBox="0 0 32 32">
+              <circle cx="16" cy="16" r="13" fill="#000080" stroke="#fff" stroke-width="1.5"/>
+              <text x="16" y="22" fill="#fff" font-size="18" font-weight="bold" text-anchor="middle">i</text>
+            </svg>
+            <span>À propos</span>`;
+        }
+        el.onclick = () => { if (!isEditMode) openWindow('win-about'); };
+      } else if (item.type === 'add') {
+        el.className = 'add-icon-btn';
+        el.innerHTML = `
+          <svg class="icon-svg" viewBox="0 0 32 32">
+            <circle cx="16" cy="16" r="12" fill="none" stroke="#fff" stroke-width="2" stroke-dasharray="3,3"/>
+            <text x="16" y="22" fill="#fff" font-size="20" font-weight="bold" text-anchor="middle">+</text>
+          </svg>
+          <span>Ajouter...</span>`;
+        el.onclick = () => { if (isEditMode) openWindow('win-add-icon'); };
+      } else {
+        el.className = 'desktop-icon custom';
+        el.innerHTML = `
+          <div class="delete-icon-btn" onclick="deleteCustomIcon(event, '${item.id}')">✕</div>
+          <img src="${item.imgSrc}" alt="${item.name}" onerror="this.onerror=null; this.src='https://raw.githubusercontent.com/${githubUsername}/${item.name}/master/icon.png';" />
+          <span>${item.name}</span>`;
+        el.onclick = () => {
+          if (!isEditMode) launchPWA(item.name, item.url);
+        };
+      }
+      return el;
+    }
+
+    function switchPage(pageIndex) {
+      if (pageIndex < 0) pageIndex = 0;
+      if (pageIndex >= totalPages) pageIndex = totalPages - 1;
+      currentPage = pageIndex;
+
+      const viewport = document.getElementById('desktop-viewport');
+      viewport.style.transform = `translateX(-${currentPage * 100}%)`;
+
+      const dots = document.querySelectorAll('.page-dot');
+      dots.forEach((dot, idx) => {
+        dot.classList.toggle('active', idx === currentPage);
+      });
+    }
+
+    function updatePageIndicators() {
+      const container = document.getElementById('page-indicator');
+      container.innerHTML = '';
+      for (let i = 0; i < totalPages; i++) {
+        const dot = document.createElement('div');
+        dot.className = 'page-dot' + (i === currentPage ? ' active' : '');
+        container.appendChild(dot);
+      }
+    }
+
+    /* --------------------------------------------------
+       DRAG & SNAP PRÉCIS SUR LA GRILLE
+    -------------------------------------------------- */
+    function setupDragForIcon(iconEl, id) {
+      let isDragging = false;
+      let startX, startY, origLeft, origTop;
+
+      const onStart = (e) => {
+        if (!isEditMode) return;
+        isDragging = true;
+        iconEl.classList.add('dragging');
+
+        const pt = e.touches ? e.touches[0] : e;
+        startX = pt.clientX;
+        startY = pt.clientY;
+
+        origLeft = iconEl.offsetLeft;
+        origTop = iconEl.offsetTop;
+
+        document.addEventListener('touchmove', onMove, { passive: false });
+        document.addEventListener('mousemove', onMove);
+        document.addEventListener('touchend', onEnd);
+        document.addEventListener('mouseup', onEnd);
+      };
+
+      const onMove = (e) => {
+        if (!isDragging) return;
+        if (e.preventDefault) e.preventDefault();
+
+        const pt = e.touches ? e.touches[0] : e;
+        const deltaX = pt.clientX - startX;
+        const deltaY = pt.clientY - startY;
+
+        iconEl.style.left = (origLeft + deltaX) + 'px';
+        iconEl.style.top = (origTop + deltaY) + 'px';
+      };
+
+      const onEnd = () => {
+        if (!isDragging) return;
+        isDragging = false;
+        iconEl.classList.remove('dragging');
+
+        const { cols, rows } = getGridDimensions();
+        const rawLeft = iconEl.offsetLeft;
+        const rawTop = iconEl.offsetTop;
+
+        let targetCol = Math.round((rawLeft - MARGIN_X) / ICON_W);
+        let targetRow = Math.round((rawTop - MARGIN_Y) / ICON_H);
+
+        targetCol = Math.max(0, Math.min(cols - 1, targetCol));
+        targetRow = Math.max(0, Math.min(rows - 1, targetRow));
+
+        const snappedX = MARGIN_X + (targetCol * ICON_W);
+        const snappedY = MARGIN_Y + (targetRow * ICON_H);
+
+        iconEl.style.left = snappedX + 'px';
+        iconEl.style.top = snappedY + 'px';
+
+        iconPositions[id] = { page: currentPage, col: targetCol, row: targetRow };
+        localStorage.setItem('github_98_icon_positions', JSON.stringify(iconPositions));
+
+        document.removeEventListener('touchmove', onMove);
+        document.removeEventListener('mousemove', onMove);
+        document.removeEventListener('touchend', onEnd);
+        document.removeEventListener('mouseup', onEnd);
+      };
+
+      iconEl.addEventListener('touchstart', onStart, { passive: true });
+      iconEl.addEventListener('mousedown', onStart);
+    }
+
+    /* --------------------------------------------------
+       GESTION DES SWIPES HORIZONTAUX DU BUREAU
+    -------------------------------------------------- */
+    function setupSwipeGesture() {
+      const container = document.getElementById('desktop-container');
+      let touchStartX = 0;
+      let touchStartY = 0;
+
+      container.addEventListener('touchstart', (e) => {
+        if (e.target.closest('.desktop-icon') && isEditMode) return;
+        touchStartX = e.touches[0].clientX;
+        touchStartY = e.touches[0].clientY;
+      }, { passive: true });
+
+      container.addEventListener('touchend', (e) => {
+        if (e.target.closest('.desktop-icon') && isEditMode) return;
+        const touchEndX = e.changedTouches[0].clientX;
+        const touchEndY = e.changedTouches[0].clientY;
+
+        const diffX = touchStartX - touchEndX;
+        const diffY = touchStartY - touchEndY;
+
+        if (Math.abs(diffX) > 50 && Math.abs(diffX) > Math.abs(diffY)) {
+          if (diffX > 0) {
+            switchPage(currentPage + 1);
+          } else {
+            switchPage(currentPage - 1);
+          }
+        }
+      });
+    }
+
+    /* --------------------------------------------------
+       ARRIÈRE-PLAN & IMPORT/EXPORT JSON
+    -------------------------------------------------- */
+    function loadWallpaper() {
+      const savedBg = localStorage.getItem('github_98_wallpaper');
+      const container = document.getElementById('desktop-container');
+      if (savedBg) {
+        container.style.backgroundImage = `url(${savedBg})`;
+      }
+    }
+
+    function setupWallpaperUploader() {
+      const container = document.getElementById('desktop-container');
+      const bgInput = document.getElementById('bg-file-input');
+
+      container.addEventListener('click', (e) => {
+        if (isEditMode && e.target.id === 'desktop-container') {
+          bgInput.click();
+        }
+      });
+
+      bgInput.addEventListener('change', (e) => {
+        const file = e.target.files[0];
+        if (file) {
+          const reader = new FileReader();
+          reader.onload = function(evt) {
+            const bgData = evt.target.result;
+            localStorage.setItem('github_98_wallpaper', bgData);
+            loadWallpaper();
+          };
+          reader.readAsDataURL(file);
+        }
+      });
+    }
+
+    function exportConfigJson() {
+      const configData = {
+        githubUsername: localStorage.getItem('github_98_username') || "username",
+        customIcons: JSON.parse(localStorage.getItem('github_98_custom_icons') || '[]'),
+        iconPositions: JSON.parse(localStorage.getItem('github_98_icon_positions') || '{}'),
+        wallpaper: localStorage.getItem('github_98_wallpaper') || ""
+      };
+
+      const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(configData, null, 2));
+      const downloadAnchor = document.createElement('a');
+      downloadAnchor.setAttribute("href", dataStr);
+      downloadAnchor.setAttribute("download", `github_98_config_${Date.now()}.json`);
+      document.body.appendChild(downloadAnchor);
+      downloadAnchor.click();
+      downloadAnchor.remove();
+    }
+
+    function importConfigJson() {
+      document.getElementById('json-file-input').click();
+    }
+
+    function setupJsonImportExport() {
+      const input = document.getElementById('json-file-input');
+      input.addEventListener('change', (e) => {
+        const file = e.target.files[0];
+        if (file) {
+          const reader = new FileReader();
+          reader.onload = function(evt) {
+            try {
+              const data = JSON.parse(evt.target.result);
+              if (data.githubUsername) localStorage.setItem('github_98_username', data.githubUsername);
+              if (data.customIcons) localStorage.setItem('github_98_custom_icons', JSON.stringify(data.customIcons));
+              if (data.iconPositions) localStorage.setItem('github_98_icon_positions', JSON.stringify(data.iconPositions));
+              if (data.wallpaper) localStorage.setItem('github_98_wallpaper', data.wallpaper);
+
+              githubUsername = data.githubUsername || githubUsername;
+              customIcons = data.customIcons || [];
+              iconPositions = data.iconPositions || {};
+
+              loadWallpaper();
+              renderDesktop();
+              closeWindow('win-config');
+              alert("Configuration importée avec succès !");
+            } catch (err) {
+              alert("Erreur lors de la lecture du fichier JSON.");
+            }
+          };
+          reader.readAsText(file);
+        }
+      });
+    }
+
+    /* --------------------------------------------------
+       LONG PRESS & MODE ÉDITION
+    -------------------------------------------------- */
+    function setupLongPress() {
+      const container = document.getElementById('desktop-container');
+
+      const startPress = (e) => {
+        if (e.target.id === 'desktop-container' || e.target.classList.contains('desktop-page')) {
+          longPressTimer = setTimeout(() => {
+            toggleEditMode();
+          }, 600);
+        }
+      };
+
+      const cancelPress = () => {
+        if (longPressTimer) {
+          clearTimeout(longPressTimer);
+          longPressTimer = null;
+        }
+      };
+
+      container.addEventListener('touchstart', startPress, { passive: true });
+      container.addEventListener('touchend', cancelPress);
+      container.addEventListener('touchmove', cancelPress);
+      container.addEventListener('mousedown', startPress);
+      container.addEventListener('mouseup', cancelPress);
+      container.addEventListener('mouseleave', cancelPress);
+    }
+
+    function toggleEditMode() {
+      isEditMode = !isEditMode;
+      document.body.classList.toggle('edit-mode', isEditMode);
+    }
+
+    /* --------------------------------------------------
+       PANNEAU DE CONFIGURATION
+    -------------------------------------------------- */
+    function openConfigPanel() {
+      document.getElementById('config-username').value = githubUsername;
+      openWindow('win-config');
+    }
+
+    function saveGithubUsername() {
+      const input = document.getElementById('config-username').value.trim();
+      if (input) {
+        githubUsername = input;
+        localStorage.setItem('github_98_username', githubUsername);
+        alert(`Compte GitHub mis à jour : ${githubUsername}`);
+        updateUrlPreview();
+        closeWindow('win-config');
+      }
+    }
+
+    function updateUrlPreview() {
+      const name = document.getElementById('icon-name').value.trim();
+      const preview = document.getElementById('url-preview-text');
+      if (name) {
+        preview.textContent = `https://${githubUsername}.github.io/${name}/`;
+      } else {
+        preview.textContent = `https://${githubUsername}.github.io/...`;
+      }
+    }
+
+    /* --------------------------------------------------
+       LANCEUR PWA & FENÊTRES
+    -------------------------------------------------- */
+    function launchPWA(appName, targetUrl) {
+      if (isEditMode) return;
+      currentPwaUrl = targetUrl;
+      currentPwaName = appName;
+      isPwaOpen = true;
+      isPwaMinimized = false;
+
+      document.getElementById('pwa-window-title').textContent = appName;
+      document.getElementById('pwa-iframe').src = targetUrl;
+      
+      const pwaWin = document.getElementById('win-pwa-viewer');
+      pwaWin.classList.remove('hidden');
+      
+      updateTaskbar();
+    }
+
+    function minimizePWAWindow() {
+      const pwaWin = document.getElementById('win-pwa-viewer');
+      pwaWin.classList.add('hidden');
+      isPwaMinimized = true;
+      updateTaskbar();
+    }
+
+    function restorePWAWindow() {
+      const pwaWin = document.getElementById('win-pwa-viewer');
+      pwaWin.classList.remove('hidden');
+      isPwaMinimized = false;
+      updateTaskbar();
+    }
+
+    function closePWAWindow() {
+      const pwaWin = document.getElementById('win-pwa-viewer');
+      pwaWin.classList.add('hidden');
+      document.getElementById('pwa-iframe').src = "about:blank";
+      isPwaOpen = false;
+      isPwaMinimized = false;
+      updateTaskbar();
+    }
+
+    function togglePWAWindow() {
+      if (isPwaMinimized) {
+        restorePWAWindow();
+      } else {
+        minimizePWAWindow();
+      }
+    }
+
+    function openPWAInNewTab() {
+      if (currentPwaUrl) {
+        window.open(currentPwaUrl, '_blank');
+      }
+    }
+
+    function updateTaskbar() {
+      const container = document.getElementById('taskbar-apps');
+      container.innerHTML = '';
+      if (isPwaOpen) {
+        const item = document.createElement('div');
+        item.className = 'task-item win-outset ' + (isPwaMinimized ? '' : 'pressed');
+        item.innerHTML = `<span>${currentPwaName}</span>`;
+        item.onclick = togglePWAWindow;
+        container.appendChild(item);
+      }
+    }
+
+    function openWindow(id) {
+      const win = document.getElementById(id);
+      if (win) win.classList.remove('hidden');
+    }
+
+    function closeWindow(id) {
+      const win = document.getElementById(id);
+      if (win) win.classList.add('hidden');
+    }
+
+    function toggleStartMenu() {
+      const startMenu = document.getElementById('start-menu');
+      const startBtn = document.getElementById('start-button');
+      const isOpen = startMenu.classList.contains('active');
+      if (isOpen) {
+        startMenu.classList.remove('active');
+        startBtn.classList.remove('pressed');
+      } else {
+        startMenu.classList.add('active');
+        startBtn.classList.add('pressed');
+      }
+    }
+
+    /* --------------------------------------------------
+       AJOUT D'ICÔNES PERSONNALISÉES
+    -------------------------------------------------- */
+    function addNewIcon() {
+      const nameInput = document.getElementById('icon-name');
+      const fileInput = document.getElementById('icon-file');
+
+      const name = nameInput.value.trim();
+      const file = fileInput.files[0];
+
+      if (!name) {
+        alert("Veuillez saisir le nom du dépôt GitHub Pages.");
+        return;
+      }
+
+      const pwaUrl = `https://${githubUsername}.github.io/${name}/`;
+      const defaultIconUrl = `https://raw.githubusercontent.com/${githubUsername}/${name}/main/icon.png`;
+
+      if (file) {
+        const reader = new FileReader();
+        reader.onload = function(e) {
+          saveAndAddIcon(name, pwaUrl, e.target.result);
+        };
+        reader.readAsDataURL(file);
+      } else {
+        saveAndAddIcon(name, pwaUrl, defaultIconUrl);
+      }
+    }
+
+    function saveAndAddIcon(name, pwaUrl, imgSrc) {
+      const iconId = 'custom-' + Date.now();
+      const iconData = {
+        id: iconId,
+        name: name,
+        url: pwaUrl,
+        imgSrc: imgSrc
+      };
+
+      customIcons.push(iconData);
+      localStorage.setItem('github_98_custom_icons', JSON.stringify(customIcons));
+      
+      renderDesktop();
+
+      document.getElementById('icon-name').value = '';
+      document.getElementById('icon-file').value = '';
+      updateUrlPreview();
+      closeWindow('win-add-icon');
+    }
+
+    function deleteCustomIcon(e, id) {
+      e.stopPropagation();
+      customIcons = customIcons.filter(icon => icon.id !== id);
+      delete iconPositions[id];
+      localStorage.setItem('github_98_custom_icons', JSON.stringify(customIcons));
+      localStorage.setItem('github_98_icon_positions', JSON.stringify(iconPositions));
+      renderDesktop();
+    }
+  </script>
+<script>
+if ('serviceWorker' in navigator) {
+window.addEventListener('load',()=>{
+navigator.serviceWorker.register('./sw.js').catch(err=>console.error(err));
+});
+}
+</script>
+</body>
+</html>
