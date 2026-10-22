@@ -184,6 +184,11 @@
       z-index: 9999 !important;
     }
 
+    .desktop-icon.drag-over {
+      border: 2px dashed #ffff00 !important;
+      background: rgba(255, 255, 0, 0.3) !important;
+    }
+
     .desktop-icon:active {
       background-color: rgba(0, 0, 128, 0.4);
       border-color: #ffc000;
@@ -231,7 +236,8 @@
       z-index: 10;
     }
 
-    body.edit-mode .desktop-icon.custom .delete-icon-btn {
+    body.edit-mode .desktop-icon.custom .delete-icon-btn,
+    body.edit-mode .desktop-icon.folder .delete-icon-btn {
       display: flex;
     }
 
@@ -394,7 +400,7 @@
     }
 
     /* --------------------------------------------------
-       FENÊTRES
+       FENÊTRES & CONTENUS DYNAMIQUES
     -------------------------------------------------- */
     .window {
       position: absolute;
@@ -411,7 +417,7 @@
 
     .window.modal-win {
       bottom: auto;
-      top: 30px;
+      top: 25px;
     }
 
     .window-titlebar {
@@ -525,12 +531,110 @@
       margin-top: 10px;
     }
 
+    /* NOTIFICATION INTERNE NON-INTRUSIVE */
+    #internal-notification {
+      position: absolute;
+      top: 10px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: #ffffcc;
+      color: #000;
+      border: 1px solid #000;
+      padding: 6px 12px;
+      font-size: 11px;
+      font-weight: bold;
+      z-index: 10000;
+      box-shadow: 2px 2px 5px rgba(0,0,0,0.4);
+      display: none;
+    }
+
+    /* CONFIRMATION INTERNE */
+    #internal-confirm-modal {
+      position: absolute;
+      top: 0; left: 0; width: 100%; height: 100%;
+      background: rgba(0,0,0,0.5);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 11000;
+    }
+    .confirm-box {
+      width: 260px;
+      background: var(--win-gray);
+      padding: 4px;
+    }
+
+    /* LISTE DES DÉPÔTS (MODALE SELECTION A-Z) */
+    .repo-list-container {
+      max-height: 200px;
+      overflow-y: auto;
+      background: #ffffff;
+      padding: 6px;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .repo-item-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 4px;
+      border-bottom: 1px solid #eee;
+    }
+
+    .folder-view-grid {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      padding: 8px;
+      background: #ffffff;
+      flex: 1;
+      overflow-y: auto;
+      align-content: flex-start;
+    }
+
+    .folder-item {
+      position: relative !important;
+      top: auto !important;
+      left: auto !important;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      width: 70px;
+      text-align: center;
+    }
+
+    .folder-item span {
+      color: #000 !important;
+      text-shadow: none !important;
+    }
+
     .hidden {
       display: none !important;
     }
   </style>
 </head>
 <body>
+
+  <!-- NOTIFICATION INTERNE -->
+  <div id="internal-notification">Notification</div>
+
+  <!-- MODALE DE CONFIRMATION INTERNE -->
+  <div id="internal-confirm-modal">
+    <div class="confirm-box win-outset">
+      <div class="window-titlebar">
+        <div class="window-title"><span>Confirmation</span></div>
+      </div>
+      <div class="window-body" style="background:var(--win-gray); text-align:center; padding: 12px;">
+        <span id="confirm-msg" style="font-size:11px; font-weight:bold;">Voulez-vous supprimer cet élément ?</span>
+        <div class="window-footer" style="justify-content:center; margin-top:12px;">
+          <button class="btn-dialog win-outset" id="confirm-yes-btn">Oui</button>
+          <button class="btn-dialog win-outset" id="confirm-no-btn">Non</button>
+        </div>
+      </div>
+    </div>
+  </div>
 
   <!-- INDICATEUR ET INPUTS FICHIERS -->
   <div id="edit-indicator">MODE ÉDITION</div>
@@ -577,7 +681,7 @@
     </div>
   </div>
 
-  <!-- 3. PANNEAU DE CONFIGURATION (AVEC TOKEN GITHUB & SWITCH) -->
+  <!-- 3. PANNEAU DE CONFIGURATION -->
   <div id="win-config" class="window modal-win win-outset hidden" style="z-index: 500;">
     <div class="window-titlebar">
       <div class="window-title">
@@ -598,9 +702,8 @@
         <input type="password" id="config-token" class="win-input win-inset" placeholder="ghp_..." />
       </div>
 
-      <div class="form-group" style="flex-direction: row; align-items: center; gap: 8px;">
-        <input type="checkbox" id="config-auto-sync" style="cursor: pointer;" />
-        <label for="config-auto-sync" style="cursor: pointer; font-weight: normal;">Synchroniser automatiquement tous les GitHub Pages en icônes</label>
+      <div style="margin-bottom: 10px;">
+        <button class="btn-dialog win-outset" style="width: 100%; font-weight: bold;" onclick="openRepoSelectorWindow()">📁 Dépôts (A-Z)</button>
       </div>
 
       <div class="form-group">
@@ -618,11 +721,36 @@
     </div>
   </div>
 
-  <!-- 4. MODALE AJOUTER UNE ICÔNE -->
+  <!-- 4. MODALE SELECTION DÉPÔTS (A-Z) -->
+  <div id="win-repo-selector" class="window modal-win win-outset hidden" style="z-index: 600;">
+    <div class="window-titlebar">
+      <div class="window-title">
+        <span>Dépôts GitHub (A-Z)</span>
+      </div>
+      <div class="window-controls">
+        <div class="win-btn win-outset" onclick="closeWindow('win-repo-selector')">✕</div>
+      </div>
+    </div>
+    <div class="window-body">
+      <div style="display: flex; gap: 6px; margin-bottom: 6px;">
+        <button class="btn-dialog win-outset" style="flex:1; font-size:10px;" onclick="selectAllRepos(true)">Tout cocher</button>
+        <button class="btn-dialog win-outset" style="flex:1; font-size:10px;" onclick="selectAllRepos(false)">Tout décocher</button>
+      </div>
+      <div id="repo-list" class="repo-list-container win-inset">
+        <!-- Rempli en JS -->
+      </div>
+      <div class="window-footer">
+        <button class="btn-dialog win-outset" onclick="saveSelectedRepos()">Valider la sélection</button>
+        <button class="btn-dialog win-outset" onclick="closeWindow('win-repo-selector')">Fermer</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 5. MODALE AJOUTER UNE ICÔNE OU DOSSIER -->
   <div id="win-add-icon" class="window modal-win win-outset hidden" style="z-index: 500;">
     <div class="window-titlebar">
       <div class="window-title">
-        <span>Ajouter un projet GitHub Pages</span>
+        <span>Nouveau raccourci ou dossier</span>
       </div>
       <div class="window-controls">
         <div class="win-btn win-outset" onclick="closeWindow('win-add-icon')">✕</div>
@@ -630,24 +758,49 @@
     </div>
     <div class="window-body">
       <div class="form-group">
-        <label for="icon-name">Nom du dépôt (ex: my-pwa) :</label>
+        <label for="add-type">Type d'élément :</label>
+        <select id="add-type" class="win-input win-inset" onchange="toggleAddTypeFields()">
+          <option value="app">Projet GitHub Pages / PWA</option>
+          <option value="folder">Dossier virtuel</option>
+        </select>
+      </div>
+
+      <div class="form-group" id="group-icon-name">
+        <label for="icon-name" id="label-icon-name">Nom du dépôt (ex: my-pwa) :</label>
         <input type="text" id="icon-name" class="win-input win-inset" placeholder="my-pwa" oninput="updateUrlPreview()" />
         <div id="url-preview-text" class="url-preview">https://...</div>
       </div>
 
-      <div class="form-group">
+      <div class="form-group" id="group-icon-file">
         <label for="icon-file">Image personnalisée (Facultatif) :</label>
         <input type="file" id="icon-file" accept="image/*" class="win-input win-inset" />
       </div>
 
       <div class="window-footer">
-        <button class="btn-dialog win-outset" onclick="addNewIcon()">Valider</button>
+        <button class="btn-dialog win-outset" onclick="addNewIconOrFolder()">Valider</button>
         <button class="btn-dialog win-outset" onclick="closeWindow('win-add-icon')">Annuler</button>
       </div>
     </div>
   </div>
 
-  <!-- 5. CONTENEUR DYNAMIQUE DE FENÊTRE PWA -->
+  <!-- 6. FENÊTRE EXPLORATEUR DE DOSSIER -->
+  <div id="win-folder-view" class="window win-outset hidden" style="z-index: 400;">
+    <div class="window-titlebar">
+      <div class="window-title">
+        <span id="folder-window-title">Dossier</span>
+      </div>
+      <div class="window-controls">
+        <div class="win-btn win-outset" onclick="closeWindow('win-folder-view')">✕</div>
+      </div>
+    </div>
+    <div class="window-body">
+      <div id="folder-content-grid" class="folder-view-grid win-inset">
+        <!-- Rempli dynamiquement -->
+      </div>
+    </div>
+  </div>
+
+  <!-- 7. CONTENEUR DYNAMIQUE DE FENÊTRE PWA -->
   <div id="win-pwa-viewer" class="window win-outset hidden">
     <div class="window-titlebar">
       <div class="window-title">
@@ -664,7 +817,7 @@
     </div>
   </div>
 
-  <!-- 6. MENU DÉMARRER -->
+  <!-- 8. MENU DÉMARRER -->
   <div id="start-menu" class="win-outset">
     <div class="start-sidebar">
       <span>Github<b>98</b></span>
@@ -699,7 +852,7 @@
     </div>
   </div>
 
-  <!-- 7. BARRE DES TÂCHES -->
+  <!-- 9. BARRE DES TÂCHES -->
   <footer id="taskbar" class="win-outset">
     <div id="start-button" class="win-outset" onclick="toggleStartMenu()">
       <svg style="width:16px; height:16px;" viewBox="0 0 32 32">
@@ -722,7 +875,7 @@
     </div>
   </footer>
 
-  <!-- 8. LOGIQUE JAVASCRIPT -->
+  <!-- 10. LOGIQUE JAVASCRIPT -->
   <script>
     const ICON_W = 75;
     const ICON_H = 85;
@@ -731,7 +884,6 @@
 
     let githubUsername = localStorage.getItem('github_98_username') || "username";
     let githubToken = localStorage.getItem('github_98_token') || "";
-    let autoSyncEnabled = localStorage.getItem('github_98_autosync') === 'true';
 
     let isEditMode = false;
     let currentPage = 0;
@@ -743,13 +895,17 @@
     let isPwaMinimized = false;
 
     let customIcons = JSON.parse(localStorage.getItem('github_98_custom_icons') || '[]');
-    let apiFetchedIcons = [];
+    let foldersData = JSON.parse(localStorage.getItem('github_98_folders') || '[]');
+    let allGithubReposList = []; 
+    let selectedRepoNames = JSON.parse(localStorage.getItem('github_98_selected_repos') || '[]');
     let iconPositions = JSON.parse(localStorage.getItem('github_98_icon_positions') || '{}');
+
+    let openFolderId = null;
 
     document.addEventListener('DOMContentLoaded', async () => {
       loadWallpaper();
-      if (autoSyncEnabled && githubUsername && githubUsername !== "username") {
-        await fetchGithubPagesRepos();
+      if (githubUsername && githubUsername !== "username") {
+        await fetchAllGithubReposAZ();
       }
       renderDesktop();
       setupWallpaperUploader();
@@ -767,32 +923,115 @@
     }
 
     /* --------------------------------------------------
-       API GITHUB PAGES FETCHING
+       NOTIFICATIONS ET CONFIRMATIONS INTERNES NON-INTRUSIVES
     -------------------------------------------------- */
-    async function fetchGithubPagesRepos() {
+    function showNotification(msg) {
+      const notif = document.getElementById('internal-notification');
+      notif.textContent = msg;
+      notif.style.display = 'block';
+      setTimeout(() => {
+        notif.style.display = 'none';
+      }, 2500);
+    }
+
+    function showInternalConfirm(msg, onYes) {
+      const modal = document.getElementById('internal-confirm-modal');
+      document.getElementById('confirm-msg').textContent = msg;
+      modal.style.display = 'flex';
+
+      const yesBtn = document.getElementById('confirm-yes-btn');
+      const noBtn = document.getElementById('confirm-no-btn');
+
+      // Cloner pour nettoyer les anciens écouteurs
+      const newYes = yesBtn.cloneNode(true);
+      const newNo = noBtn.cloneNode(true);
+      yesBtn.parentNode.replaceChild(newYes, yesBtn);
+      noBtn.parentNode.replaceChild(newNo, noBtn);
+
+      newYes.onclick = () => {
+        modal.style.display = 'none';
+        onYes();
+      };
+      newNo.onclick = () => {
+        modal.style.display = 'none';
+      };
+    }
+
+    /* --------------------------------------------------
+       DÉTECTION COMPLÈTE DES DÉPÔTS DE A à Z (API GITHUB)
+    -------------------------------------------------- */
+    async function fetchAllGithubReposAZ() {
       if (!githubUsername || githubUsername === "username") return;
+      allGithubReposList = [];
+      let page = 1;
+      let hasMore = true;
+
       try {
         const headers = {};
         if (githubToken) {
           headers['Authorization'] = `token ${githubToken}`;
         }
-        const response = await fetch(`https://api.github.com/users/${githubUsername}/repos?per_page=100`, { headers });
-        if (!response.ok) throw new Error("Erreur de récupération des dépôts GitHub");
-        const repos = await response.json();
 
-        apiFetchedIcons = repos.map(repo => {
-          return {
-            id: 'api-repo-' + repo.id,
-            name: repo.name,
-            url: `https://${githubUsername}.github.io/${repo.name}/`,
-            imgSrc: `https://raw.githubusercontent.com/${githubUsername}/${repo.name}/main/icon.png`,
-            isApi: true
-          };
-        });
+        while (hasMore && page <= 5) {
+          const response = await fetch(`https://api.github.com/users/${githubUsername}/repos?per_page=100&page=${page}&sort=full_name&direction=asc`, { headers });
+          if (!response.ok) break;
+          const repos = await response.json();
+          if (repos.length === 0) {
+            hasMore = false;
+          } else {
+            allGithubReposList.push(...repos);
+            page++;
+          }
+        }
+
+        allGithubReposList.sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));
       } catch (err) {
-        console.error(err);
-        apiFetchedIcons = [];
+        console.error("Erreur chargement dépôts GitHub A-Z:", err);
       }
+    }
+
+    function openRepoSelectorWindow() {
+      const listContainer = document.getElementById('repo-list');
+      listContainer.innerHTML = '';
+
+      if (allGithubReposList.length === 0) {
+        listContainer.innerHTML = '<div style="padding: 10px; color: #666;">Aucun dépôt détecté. Vérifiez le nom d\'utilisateur et le token.</div>';
+      } else {
+        allGithubReposList.forEach(repo => {
+          const row = document.createElement('div');
+          row.className = 'repo-item-row';
+          const isChecked = selectedRepoNames.includes(repo.name);
+          row.innerHTML = `
+            <input type="checkbox" id="chk-repo-${repo.name}" value="${repo.name}" ${isChecked ? 'checked' : ''} />
+            <label for="chk-repo-${repo.name}" style="cursor:pointer; flex:1;">${repo.name}</label>
+          `;
+          listContainer.appendChild(row);
+        });
+      }
+
+      openWindow('win-repo-selector');
+    }
+
+    function selectAllRepos(status) {
+      const checkboxes = document.querySelectorAll('#repo-list input[type="checkbox"]');
+      checkboxes.forEach(chk => {
+        chk.checked = status;
+      });
+    }
+
+    function saveSelectedRepos() {
+      const checkboxes = document.querySelectorAll('#repo-list input[type="checkbox"]');
+      selectedRepoNames = [];
+      checkboxes.forEach(chk => {
+        if (chk.checked) {
+          selectedRepoNames.push(chk.value);
+        }
+      });
+
+      localStorage.setItem('github_98_selected_repos', JSON.stringify(selectedRepoNames));
+      renderDesktop();
+      closeWindow('win-repo-selector');
+      showNotification("Dépôts mis à jour avec succès !");
     }
 
     /* --------------------------------------------------
@@ -808,6 +1047,22 @@
       return { cols, rows, w, h };
     }
 
+    function getDisplayedGithubApps() {
+      const result = [];
+      allGithubReposList.forEach(repo => {
+        if (selectedRepoNames.includes(repo.name)) {
+          result.push({
+            id: 'repo-' + repo.id,
+            type: 'github-repo',
+            name: repo.name,
+            url: `https://${githubUsername}.github.io/${repo.name}/`,
+            imgSrc: `https://raw.githubusercontent.com/${githubUsername}/${repo.name}/main/icon.png`
+          });
+        }
+      });
+      return result;
+    }
+
     function renderDesktop() {
       const viewport = document.getElementById('desktop-viewport');
       viewport.innerHTML = '';
@@ -815,18 +1070,23 @@
       const { cols, rows } = getGridDimensions();
       const itemsPerPage = cols * rows;
 
-      const activeApiIcons = autoSyncEnabled ? apiFetchedIcons : [];
+      const githubApps = getDisplayedGithubApps();
 
+      // Toutes les icônes (système + dossiers + custom + repos) sont désormais traitées de manière unifiée
       const allAppList = [
         { id: 'static-computer', type: 'static', name: 'Poste de travail' },
         { id: 'static-about', type: 'static', name: 'À propos' },
+        { id: 'static-trash', type: 'trash', name: 'Corbeille' },
+        ...foldersData,
         ...customIcons,
-        ...activeApiIcons,
+        ...githubApps,
         { id: 'btn-add-icon', type: 'add', name: 'Ajouter...' }
       ];
 
+      const desktopApps = allAppList.filter(item => !item.insideFolder);
+
       let maxPageFound = 0;
-      allAppList.forEach((item, index) => {
+      desktopApps.forEach((item, index) => {
         let pos = iconPositions[item.id];
         if (pos && pos.page !== undefined) {
           if (pos.page > maxPageFound) maxPageFound = pos.page;
@@ -845,7 +1105,7 @@
         viewport.appendChild(pageEl);
       }
 
-      allAppList.forEach((item, index) => {
+      desktopApps.forEach((item, index) => {
         let pos = iconPositions[item.id];
         let page, col, row;
 
@@ -871,7 +1131,7 @@
         iconEl.style.top = posY + 'px';
 
         targetPage.appendChild(iconEl);
-        setupDragForIcon(iconEl, item.id);
+        setupDragForIcon(iconEl, item);
       });
 
       localStorage.setItem('github_98_icon_positions', JSON.stringify(iconPositions));
@@ -882,6 +1142,8 @@
     function createIconElement(item) {
       const el = document.createElement('div');
       el.id = item.id;
+      el.dataset.id = item.id;
+      el.dataset.type = item.type;
 
       if (item.type === 'static') {
         el.className = 'desktop-icon';
@@ -893,6 +1155,7 @@
               <path d="M 8 22 L 24 22 L 26 28 L 6 28 Z" fill="#808080" stroke="#000" stroke-width="1.5"/>
             </svg>
             <span>Poste de travail</span>`;
+          el.onclick = () => { if (!isEditMode) openWindow('win-about'); };
         } else {
           el.innerHTML = `
             <svg class="icon-svg" viewBox="0 0 32 32">
@@ -900,8 +1163,30 @@
               <text x="16" y="22" fill="#fff" font-size="18" font-weight="bold" text-anchor="middle">i</text>
             </svg>
             <span>À propos</span>`;
+          el.onclick = () => { if (!isEditMode) openWindow('win-about'); };
         }
-        el.onclick = () => { if (!isEditMode) openWindow('win-about'); };
+      } else if (item.type === 'trash') {
+        el.className = 'desktop-icon trash-bin';
+        el.innerHTML = `
+          <svg class="icon-svg" viewBox="0 0 32 32">
+            <rect x="6" y="8" width="20" height="20" fill="#c0c0c0" stroke="#000" stroke-width="1.5"/>
+            <line x1="4" y1="8" x2="28" y2="8" stroke="#000" stroke-width="2"/>
+            <rect x="11" y="4" width="10" height="4" fill="#808080" stroke="#000" stroke-width="1"/>
+            <line x1="11" y1="12" x2="11" y2="24" stroke="#808080" stroke-width="2"/>
+            <line x1="16" y1="12" x2="16" y2="24" stroke="#808080" stroke-width="2"/>
+            <line x1="21" y1="12" x2="21" y2="24" stroke="#808080" stroke-width="2"/>
+          </svg>
+          <span>Corbeille</span>`;
+        el.onclick = () => { if (!isEditMode) showNotification("La corbeille est vide."); };
+      } else if (item.type === 'folder') {
+        el.className = 'desktop-icon folder';
+        el.innerHTML = `
+          <div class="delete-icon-btn" onclick="deleteFolder(event, '${item.id}')">✕</div>
+          <svg class="icon-svg" viewBox="0 0 32 32">
+            <path d="M 2 8 L 12 8 L 15 11 L 30 11 L 30 26 L 2 26 Z" fill="#ffd700" stroke="#000" stroke-width="1.5"/>
+          </svg>
+          <span>${item.name}</span>`;
+        el.onclick = () => { if (!isEditMode) openFolderView(item); };
       } else if (item.type === 'add') {
         el.className = 'add-icon-btn';
         el.innerHTML = `
@@ -913,9 +1198,8 @@
         el.onclick = () => { if (isEditMode) openWindow('win-add-icon'); };
       } else {
         el.className = 'desktop-icon custom';
-        const deleteBtnHtml = item.isApi ? '' : `<div class="delete-icon-btn" onclick="deleteCustomIcon(event, '${item.id}')">✕</div>`;
         el.innerHTML = `
-          ${deleteBtnHtml}
+          <div class="delete-icon-btn" onclick="deleteCustomIcon(event, '${item.id}')">✕</div>
           <img src="${item.imgSrc}" alt="${item.name}" onerror="this.onerror=null; this.src='https://raw.githubusercontent.com/${githubUsername}/${item.name}/master/icon.png';" />
           <span>${item.name}</span>`;
         el.onclick = () => {
@@ -950,14 +1234,17 @@
     }
 
     /* --------------------------------------------------
-       DRAG & SNAP PRÉCIS SUR LA GRILLE
+       DRAG & SNAP PRÉCIS & GLISSER DANS DOSSIER / CORBEILLE
     -------------------------------------------------- */
-    function setupDragForIcon(iconEl, id) {
+    function setupDragForIcon(iconEl, item) {
       let isDragging = false;
       let startX, startY, origLeft, origTop;
 
       const onStart = (e) => {
         if (!isEditMode) return;
+        // Le bouton d'ajout ne se déplace pas
+        if (item.id === 'btn-add-icon') return;
+
         isDragging = true;
         iconEl.classList.add('dragging');
 
@@ -984,12 +1271,49 @@
 
         iconEl.style.left = (origLeft + deltaX) + 'px';
         iconEl.style.top = (origTop + deltaY) + 'px';
+
+        const elemBelow = document.elementFromPoint(pt.clientX, pt.clientY);
+        const folderTarget = elemBelow ? elemBelow.closest('.desktop-icon.folder') : null;
+        const trashTarget = elemBelow ? elemBelow.closest('.desktop-icon.trash-bin') : null;
+
+        document.querySelectorAll('.drag-over').forEach(el => el.classList.remove('drag-over'));
+        if (folderTarget && folderTarget.id !== item.id) {
+          folderTarget.classList.add('drag-over');
+        } else if (trashTarget) {
+          trashTarget.classList.add('drag-over');
+        }
       };
 
-      const onEnd = () => {
+      const onEnd = (e) => {
         if (!isDragging) return;
         isDragging = false;
         iconEl.classList.remove('dragging');
+
+        const pt = e.changedTouches ? e.changedTouches[0] : e;
+        const elemBelow = document.elementFromPoint(pt.clientX, pt.clientY);
+
+        const folderTarget = elemBelow ? elemBelow.closest('.desktop-icon.folder') : null;
+        const trashTarget = elemBelow ? elemBelow.closest('.desktop-icon.trash-bin') : null;
+
+        document.querySelectorAll('.drag-over').forEach(el => el.classList.remove('drag-over'));
+
+        // GLISSER SUR LA CORBEILLE -> DEMANDER CONFIRMATION
+        if (trashTarget && item.id !== 'static-trash') {
+          showInternalConfirm(`Voulez-vous supprimer "${item.name}" ?`, () => {
+            deleteElementToTrash(item);
+          });
+          iconEl.style.left = origLeft + 'px';
+          iconEl.style.top = origTop + 'px';
+          cleanupEvents();
+          return;
+        }
+
+        // GLISSER SUR UN DOSSIER -> RANGER DEDANS
+        if (folderTarget && folderTarget.id !== item.id) {
+          moveItemIntoFolder(item, folderTarget.id);
+          cleanupEvents();
+          return;
+        }
 
         const { cols, rows } = getGridDimensions();
         const rawLeft = iconEl.offsetLeft;
@@ -1007,9 +1331,13 @@
         iconEl.style.left = snappedX + 'px';
         iconEl.style.top = snappedY + 'px';
 
-        iconPositions[id] = { page: currentPage, col: targetCol, row: targetRow };
+        iconPositions[item.id] = { page: currentPage, col: targetCol, row: targetRow };
         localStorage.setItem('github_98_icon_positions', JSON.stringify(iconPositions));
 
+        cleanupEvents();
+      };
+
+      const cleanupEvents = () => {
         document.removeEventListener('touchmove', onMove);
         document.removeEventListener('mousemove', onMove);
         document.removeEventListener('touchend', onEnd);
@@ -1018,6 +1346,70 @@
 
       iconEl.addEventListener('touchstart', onStart, { passive: true });
       iconEl.addEventListener('mousedown', onStart);
+    }
+
+    /* --------------------------------------------------
+       GESTION DES DOSSIERS ET SUPPRESSION CORBEILLE
+    -------------------------------------------------- */
+    function moveItemIntoFolder(item, folderId) {
+      const folder = foldersData.find(f => f.id === folderId);
+      if (!folder) return;
+
+      if (!folder.items) folder.items = [];
+      folder.items.push(item);
+      item.insideFolder = true;
+
+      if (item.type === 'custom') {
+        customIcons = customIcons.filter(ci => ci.id !== item.id);
+        localStorage.setItem('github_98_custom_icons', JSON.stringify(customIcons));
+      } else if (item.type === 'github-repo') {
+        selectedRepoNames = selectedRepoNames.filter(name => name !== item.name);
+        localStorage.setItem('github_98_selected_repos', JSON.stringify(selectedRepoNames));
+      }
+
+      localStorage.setItem('github_98_folders', JSON.stringify(foldersData));
+      delete iconPositions[item.id];
+      localStorage.setItem('github_98_icon_positions', JSON.stringify(iconPositions));
+
+      renderDesktop();
+      showNotification(`Élément rangé dans "${folder.name}"`);
+    }
+
+    function deleteElementToTrash(item) {
+      if (item.type === 'folder') {
+        foldersData = foldersData.filter(f => f.id !== item.id);
+        localStorage.setItem('github_98_folders', JSON.stringify(foldersData));
+      } else if (item.type === 'custom') {
+        customIcons = customIcons.filter(c => c.id !== item.id);
+        localStorage.setItem('github_98_custom_icons', JSON.stringify(customIcons));
+      } else if (item.type === 'github-repo') {
+        selectedRepoNames = selectedRepoNames.filter(name => name !== item.name);
+        localStorage.setItem('github_98_selected_repos', JSON.stringify(selectedRepoNames));
+      }
+
+      delete iconPositions[item.id];
+      localStorage.setItem('github_98_icon_positions', JSON.stringify(iconPositions));
+      renderDesktop();
+      showNotification("Élément supprimé avec succès.");
+    }
+
+    function openFolderView(folder) {
+      openFolderId = folder.id;
+      document.getElementById('folder-window-title').textContent = folder.name;
+      const grid = document.getElementById('folder-content-grid');
+      grid.innerHTML = '';
+
+      if (!folder.items || folder.items.length === 0) {
+        grid.innerHTML = '<div style="padding:15px; color:#666;">Ce dossier est vide. Glissez des icônes dessus en Mode Édition.</div>';
+      } else {
+        folder.items.forEach(item => {
+          const el = createIconElement(item);
+          el.className = 'desktop-icon folder-item';
+          grid.appendChild(el);
+        });
+      }
+
+      openWindow('win-folder-view');
     }
 
     /* --------------------------------------------------
@@ -1077,6 +1469,7 @@
             const bgData = evt.target.result;
             localStorage.setItem('github_98_wallpaper', bgData);
             loadWallpaper();
+            showNotification("Fond d'écran mis à jour !");
           };
           reader.readAsDataURL(file);
         }
@@ -1087,8 +1480,9 @@
       const configData = {
         githubUsername: localStorage.getItem('github_98_username') || "username",
         githubToken: localStorage.getItem('github_98_token') || "",
-        autoSync: localStorage.getItem('github_98_autosync') === 'true',
+        selectedRepos: JSON.parse(localStorage.getItem('github_98_selected_repos') || '[]'),
         customIcons: JSON.parse(localStorage.getItem('github_98_custom_icons') || '[]'),
+        folders: JSON.parse(localStorage.getItem('github_98_folders') || '[]'),
         iconPositions: JSON.parse(localStorage.getItem('github_98_icon_positions') || '{}'),
         wallpaper: localStorage.getItem('github_98_wallpaper') || ""
       };
@@ -1100,6 +1494,7 @@
       document.body.appendChild(downloadAnchor);
       downloadAnchor.click();
       downloadAnchor.remove();
+      showNotification("Configuration exportée !");
     }
 
     function importConfigJson() {
@@ -1117,24 +1512,26 @@
               const data = JSON.parse(evt.target.result);
               if (data.githubUsername) localStorage.setItem('github_98_username', data.githubUsername);
               if (data.githubToken !== undefined) localStorage.setItem('github_98_token', data.githubToken);
-              if (data.autoSync !== undefined) localStorage.setItem('github_98_autosync', data.autoSync);
+              if (data.selectedRepos) localStorage.setItem('github_98_selected_repos', JSON.stringify(data.selectedRepos));
               if (data.customIcons) localStorage.setItem('github_98_custom_icons', JSON.stringify(data.customIcons));
+              if (data.folders) localStorage.setItem('github_98_folders', JSON.stringify(data.folders));
               if (data.iconPositions) localStorage.setItem('github_98_icon_positions', JSON.stringify(data.iconPositions));
               if (data.wallpaper) localStorage.setItem('github_98_wallpaper', data.wallpaper);
 
               githubUsername = data.githubUsername || githubUsername;
               githubToken = data.githubToken || "";
-              autoSyncEnabled = data.autoSync || false;
+              selectedRepoNames = data.selectedRepos || [];
               customIcons = data.customIcons || [];
+              foldersData = data.folders || [];
               iconPositions = data.iconPositions || {};
 
               loadWallpaper();
-              if (autoSyncEnabled) await fetchGithubPagesRepos();
+              if (githubUsername && githubUsername !== "username") await fetchAllGithubReposAZ();
               renderDesktop();
               closeWindow('win-config');
-              alert("Configuration importée avec succès !");
+              showNotification("Configuration importée avec succès !");
             } catch (err) {
-              alert("Erreur lors de la lecture du fichier JSON.");
+              showNotification("Erreur lors de la lecture du fichier JSON.");
             }
           };
           reader.readAsText(file);
@@ -1143,7 +1540,7 @@
     }
 
     /* --------------------------------------------------
-       MODE ÉDITION (DEPUIS LE MENU DÉMARRER)
+       MODE ÉDITION
     -------------------------------------------------- */
     function toggleEditMode() {
       isEditMode = !isEditMode;
@@ -1152,6 +1549,7 @@
       if (label) {
         label.textContent = isEditMode ? "Désactiver Mode Édition" : "Activer Mode Édition";
       }
+      showNotification(isEditMode ? "Mode Édition activé" : "Mode Édition désactivé");
     }
 
     /* --------------------------------------------------
@@ -1160,14 +1558,12 @@
     function openConfigPanel() {
       document.getElementById('config-username').value = githubUsername;
       document.getElementById('config-token').value = githubToken;
-      document.getElementById('config-auto-sync').checked = autoSyncEnabled;
       openWindow('win-config');
     }
 
     async function saveConfig() {
       const uInput = document.getElementById('config-username').value.trim();
       const tInput = document.getElementById('config-token').value.trim();
-      const syncChecked = document.getElementById('config-auto-sync').checked;
 
       if (uInput) {
         githubUsername = uInput;
@@ -1176,18 +1572,13 @@
       githubToken = tInput;
       localStorage.setItem('github_98_token', githubToken);
 
-      autoSyncEnabled = syncChecked;
-      localStorage.setItem('github_98_autosync', autoSyncEnabled);
-
-      if (autoSyncEnabled) {
-        await fetchGithubPagesRepos();
-      } else {
-        apiFetchedIcons = [];
+      if (githubUsername && githubUsername !== "username") {
+        await fetchAllGithubReposAZ();
       }
 
       renderDesktop();
       closeWindow('win-config');
-      alert("Paramètres de configuration enregistrés !");
+      showNotification("Paramètres enregistrés !");
     }
 
     function updateUrlPreview() {
@@ -1292,31 +1683,66 @@
     }
 
     /* --------------------------------------------------
-       AJOUT D'ICÔNES PERSONNALISÉES
+       AJOUT D'ICÔNES ET DE DOSSIERS
     -------------------------------------------------- */
-    function addNewIcon() {
+    function toggleAddTypeFields() {
+      const type = document.getElementById('add-type').value;
+      const grpUrl = document.getElementById('group-icon-name');
+      const grpFile = document.getElementById('group-icon-file');
+      const labelName = document.getElementById('label-icon-name');
+
+      if (type === 'folder') {
+        grpFile.classList.add('hidden');
+        labelName.textContent = "Nom du dossier :";
+        document.getElementById('icon-name').placeholder = "Nouveau Dossier";
+        document.getElementById('url-preview-text').classList.add('hidden');
+      } else {
+        grpFile.classList.remove('hidden');
+        labelName.textContent = "Nom du dépôt (ex: my-pwa) :";
+        document.getElementById('icon-name').placeholder = "my-pwa";
+        document.getElementById('url-preview-text').classList.remove('hidden');
+      }
+    }
+
+    function addNewIconOrFolder() {
+      const type = document.getElementById('add-type').value;
       const nameInput = document.getElementById('icon-name');
       const fileInput = document.getElementById('icon-file');
 
       const name = nameInput.value.trim();
-      const file = fileInput.files[0];
-
       if (!name) {
-        alert("Veuillez saisir le nom du dépôt GitHub Pages.");
+        showNotification("Veuillez saisir un nom.");
         return;
       }
 
-      const pwaUrl = `https://${githubUsername}.github.io/${name}/`;
-      const defaultIconUrl = `https://raw.githubusercontent.com/${githubUsername}/${name}/main/icon.png`;
-
-      if (file) {
-        const reader = new FileReader();
-        reader.onload = function(e) {
-          saveAndAddIcon(name, pwaUrl, e.target.result);
+      if (type === 'folder') {
+        const folderData = {
+          id: 'folder-' + Date.now(),
+          type: 'folder',
+          name: name,
+          items: []
         };
-        reader.readAsDataURL(file);
+
+        foldersData.push(folderData);
+        localStorage.setItem('github_98_folders', JSON.stringify(foldersData));
+        renderDesktop();
+        closeWindow('win-add-icon');
+        nameInput.value = '';
+        showNotification("Dossier créé avec succès !");
       } else {
-        saveAndAddIcon(name, pwaUrl, defaultIconUrl);
+        const file = fileInput.files[0];
+        const pwaUrl = `https://${githubUsername}.github.io/${name}/`;
+        const defaultIconUrl = `https://raw.githubusercontent.com/${githubUsername}/${name}/main/icon.png`;
+
+        if (file) {
+          const reader = new FileReader();
+          reader.onload = function(e) {
+            saveAndAddIcon(name, pwaUrl, e.target.result);
+          };
+          reader.readAsDataURL(file);
+        } else {
+          saveAndAddIcon(name, pwaUrl, defaultIconUrl);
+        }
       }
     }
 
@@ -1324,6 +1750,7 @@
       const iconId = 'custom-' + Date.now();
       const iconData = {
         id: iconId,
+        type: 'custom',
         name: name,
         url: pwaUrl,
         imgSrc: imgSrc
@@ -1338,15 +1765,31 @@
       document.getElementById('icon-file').value = '';
       updateUrlPreview();
       closeWindow('win-add-icon');
+      showNotification("Raccourci ajouté !");
     }
 
     function deleteCustomIcon(e, id) {
       e.stopPropagation();
-      customIcons = customIcons.filter(icon => icon.id !== id);
-      delete iconPositions[id];
-      localStorage.setItem('github_98_custom_icons', JSON.stringify(customIcons));
-      localStorage.setItem('github_98_icon_positions', JSON.stringify(iconPositions));
-      renderDesktop();
+      showInternalConfirm("Voulez-vous supprimer ce raccourci ?", () => {
+        customIcons = customIcons.filter(icon => icon.id !== id);
+        delete iconPositions[id];
+        localStorage.setItem('github_98_custom_icons', JSON.stringify(customIcons));
+        localStorage.setItem('github_98_icon_positions', JSON.stringify(iconPositions));
+        renderDesktop();
+        showNotification("Supprimé.");
+      });
+    }
+
+    function deleteFolder(e, id) {
+      e.stopPropagation();
+      showInternalConfirm("Voulez-vous supprimer ce dossier et son contenu ?", () => {
+        foldersData = foldersData.filter(folder => folder.id !== id);
+        delete iconPositions[id];
+        localStorage.setItem('github_98_folders', JSON.stringify(foldersData));
+        localStorage.setItem('github_98_icon_positions', JSON.stringify(iconPositions));
+        renderDesktop();
+        showNotification("Dossier supprimé.");
+      });
     }
   </script>
 </body>
